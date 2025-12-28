@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php: ['8.1']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, bcmath, sqlite, xml
+
+      - name: Install Composer dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php -r "file_put_contents('.env', str_replace(["DB_CONNECTION=mysql","DB_DATABASE=laravel"], ["DB_CONNECTION=sqlite","DB_DATABASE=":memory:""], file_get_contents('.env')));" || true
+          echo "DB_CONNECTION=sqlite" >> .env
+          echo "DB_DATABASE=:memory:" >> .env
+
+      - name: Generate key
+        run: php artisan key:generate --ansi
+
+      - name: Run migrations and tests
+        run: |
+          php artisan migrate --force --no-interaction
+          ./vendor/bin/phpunit --verbose
